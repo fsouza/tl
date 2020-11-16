@@ -241,8 +241,6 @@ local function report_type_errors(result)
    return not has_type_errors
 end
 
-local env = nil
-
 local function get_shared_library_ext()
    if is_nil_or_whitespace(package.cpath) then
       return "so" -- FIXME
@@ -274,24 +272,22 @@ end
 local modules = tlconfig.preload_modules
 
 local function setup_env(filename)
-   if not env then
-      local basename, extension = filename:match("(.*)%.([a-z]+)$")
-      extension = extension and extension:lower()
+   local basename, extension = filename:match("(.*)%.([a-z]+)$")
+   extension = extension and extension:lower()
 
-      local lax_mode
-      if extension == "tl" then
-         lax_mode = false
-      elseif extension == "lua" then
-         lax_mode = true
-      else
-         -- if we can't decide based on the file extension, default to strict mode
-         lax_mode = false
-      end
-
-      local skip_compat53 = tlconfig["skip_compat53"]
-
-      env = tl.init_env(lax_mode, skip_compat53)
+   local lax_mode
+   if extension == "tl" then
+      lax_mode = false
+   elseif extension == "lua" then
+      lax_mode = true
+   else
+      -- if we can't decide based on the file extension, default to strict mode
+      lax_mode = false
    end
+
+   local skip_compat53 = tlconfig["skip_compat53"]
+
+   return tl.init_env(lax_mode, skip_compat53)
 end
 
 local function get_output_filename(file_name)
@@ -309,13 +305,12 @@ local function get_output_filename(file_name)
 end
 
 local function type_check_file(file_name)
-   setup_env(file_name)
+   local env = setup_env(file_name)
 
    local result, err = tl.process(file_name, env, nil, modules)
    if err then
       die(err)
    end
-   env = result.env
 
    local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
    if has_syntax_errors then
@@ -346,11 +341,11 @@ local function type_check_file(file_name)
 end
 
 local function type_check_and_load(filename, modules)
+   local env = setup_env(filename)
    local result, err = tl.process(filename, env, nil, modules)
    if err then
       die(err)
    end
-   env = result.env
 
    local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
    if has_syntax_errors then
@@ -454,7 +449,7 @@ if cmd == "gen" then
    local results = {}
    local err
    for i, input_file in ipairs(args["script"]) do
-      setup_env(input_file)
+      local env = setup_env(input_file)
       local res = {
          input_file = input_file,
          output_file = get_output_filename(input_file)
@@ -464,7 +459,6 @@ if cmd == "gen" then
       if err then
          die(err)
       end
-      env = res.tl_result.env
 
       if #res.tl_result.syntax_errors > 0 then
          exit = 1
@@ -774,13 +768,12 @@ table.sort(sorted_source_file_arr, function(a, b) return a[1] < b[1] end)
 
 for i, files in ipairs(sorted_source_file_arr) do
    local input_file, output_file = files[1], files[2]
-   setup_env(input_file)
+   local env = setup_env(input_file)
 
    local result, err = tl.process(input_file, env, nil, modules)
    if err then
       die(err)
    end
-   env = result.env
 
    local has_syntax_errors = report_errors("syntax error", result.syntax_errors)
    if has_syntax_errors then
